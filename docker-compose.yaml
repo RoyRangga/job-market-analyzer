@@ -1,6 +1,19 @@
 version: '3.8'
 
 services:
+  # menjalankan dockerfile
+  scrapper:
+    build: .
+    volumes:
+      - .:/app
+    environment:
+      - DB_SERVER=sql-server
+      - MINIO_ENDPOINT=http://minio:9000
+    networks:
+      - de-network
+    depends_on:
+      - sql-server
+      - minio
   # 1. SQL Server
   sql-server:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -61,6 +74,7 @@ services:
       - KAFKA_BROKER_ID=1
       - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
       - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
     networks:
       - de-network
@@ -81,3 +95,6 @@ services:
 networks:
   de-network:
     driver: bridge
+
+# volumes:
+#   mssql_data

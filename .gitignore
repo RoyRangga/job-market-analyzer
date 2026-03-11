@@ -1,4 +1,21 @@
-chrome_profile/
+# Python bytecode
 __pycache__/
+*.py[cod]
+
+# Environments
 .env
+.venv/
+env/
+
+# Chrome profiles & local data
+chrome_profile/
+**/chrome_profile/
+
+# Temporary office files
+~$*.docx
+
+# Data files
+*.parquet
 *.csv
+*.json
+*.pyc

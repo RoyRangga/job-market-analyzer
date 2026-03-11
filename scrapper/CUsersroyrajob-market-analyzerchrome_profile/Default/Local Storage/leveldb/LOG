@@ -1,0 +1,9 @@
+2026/03/09-08:58:25.882 2d85 Reusing MANIFEST /app/scrapper/C:\Users\royra\job-market-analyzer\chrome_profile/Default/Local Storage/leveldb/MANIFEST-000001
+2026/03/09-08:58:25.929 2d85 Recovering log #82
+2026/03/09-08:58:25.970 2d85 Reusing old log /app/scrapper/C:\Users\royra\job-market-analyzer\chrome_profile/Default/Local Storage/leveldb/000082.log 
+2026/03/09-08:59:30.587 2d87 Level-0 table #87: started
+2026/03/09-08:59:31.978 2d87 Level-0 table #87: 18741 bytes OK
+2026/03/09-08:59:32.000 2d87 Delete type=0 #82
+2026/03/09-09:01:03.765 2d87 Level-0 table #89: started
+2026/03/09-09:01:03.776 2d87 Level-0 table #89: 16966 bytes OK
+2026/03/09-09:01:03.797 2d87 Delete type=0 #86

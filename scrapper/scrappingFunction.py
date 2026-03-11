@@ -28,6 +28,10 @@ def get_sql_engine():
 
 def upload_to_minio(data, bucket_name, object_name):
     #konfigurasi koneksi
+    if not data or len(data) == 0:
+        print(f"gagal upload ke Minio karena data {object_name} kosong")
+        return
+
     s3_client = boto3.client(
         's3',
         # endpoint_url = 'http://localhost:9000',#ini untuk koneksi dari komputer ke 9000
@@ -84,7 +88,6 @@ def scrape_kaliber(main_url):
 
     list_jobs=[]
     try:
-        # job_listings = driver.find_elements(By.CLASS_NAME, "k-font-dm-sans")
         job_listings = driver.find_elements(By.XPATH, "//h2[contains(@data-tooltip-id, 'job-title-tooltip-[object Object]')]/a")
         for link in job_listings:
             try:
@@ -94,10 +97,10 @@ def scrape_kaliber(main_url):
                     "site": "Kalibrr" # Jaminan: site tidak akan NULL
                 })
             except Exception as e:
-                print(f"gagal tarik data: {e}")   
+                print(f"gagal tarik data: {e}")
         for item in list_jobs:
             driver.get(item['link'])
-            time.sleep(3)            
+            time.sleep(3)
             try:
                 #retrieve data alamat
                 item['site2']="Kalibrr"
@@ -139,7 +142,7 @@ def scrape_kaliber(main_url):
                 item['valid_through']=driver.find_element(By.XPATH, "//span[contains(@itemprop, 'validThrough')]").get_attribute("textContent")
                 item['valid_through'] = datetime.fromisoformat(item['valid_through']).strftime("%Y-%m-%d")
             except Exception as e:
-                print(f"gagal tarik data: {e}")   
+                print(f"gagal tarik data: {e}")
     except Exception as e:
         print(f"scripping gagal: {e}")
     finally:
@@ -151,20 +154,27 @@ def scrap_jobstreet(main_url):
     driver.get(main_url)
     list_jobs=[]
     try:
-        #dapatkan semua link dari job yang di post
-        all_links = driver.find_elements(By.XPATH, "//div[contains(@class, '_1ybl4650 _6wfnkx4x _6wfnkx4v')]/a")
-        for link in all_links:
-            single_link = link.get_attribute("href")
-            list_jobs.append({'link':single_link, "site":"Jobstreet"})
+        all_links = driver.find_elements(By.XPATH, "//div/a[contains(@data-automation, 'jobTitle')]")
+        all_date_posted = driver.find_elements(By.XPATH, "//span[contains(@data-automation, 'jobListingDate')]")
+        semua_link = [i.get_attribute("href") for i in all_links]
+        semua_date = [i.get_attribute("textContent").strip() for i in all_date_posted]
+        print(semua_link)
+
+        for i in range(len(all_links)):
+            single_link = all_links[i].get_attribute("href")
+            single_date = semua_date[i]
+            list_jobs.append({'link':single_link, "site":"Jobstreet", "date_posted_raw":single_date})#####
+
+        print(list_jobs) 
+
         for item in list_jobs:
-            driver.get(item['link'])    
+            driver.get(item['link'])
             time.sleep(2)
             try:
                 item["site2"]="Jobstreet"
                 #mendapatkan lokasi job
                 try:
                     wait_element_location = WebDriverWait(driver, 10).until(
-                        # driver.find_element(By.XPATH, "//span[contains(@data-automation, 'job-detail-location')]/a")
                         EC.presence_of_element_located((By.XPATH, "//span[contains(@data-automation, 'job-detail-location')]/a"))
                     )
                     item["location"]=wait_element_location.text
@@ -174,7 +184,6 @@ def scrap_jobstreet(main_url):
                 #mendapatkan nama job
                 try:
                     wait_element_job_type = WebDriverWait(driver, 10).until(
-                        # job_detail_work_type = driver.find_element(By.XPATH, "//span[contains(@data-automation, 'job-detail-work-type')]/a")
                         EC.presence_of_element_located((By.XPATH, "//span[contains(@data-automation, 'job-detail-work-type')]/a"))
                     )
                     item["job_type"]= wait_element_job_type.text
@@ -182,12 +191,11 @@ def scrap_jobstreet(main_url):
                 except Exception as e:
                     print(f"gagal menarik data job_detail_work_type, karena: {e}")
                     item["job_type"] = "N/A"
-                
-                item["role"]=driver.find_element(By.XPATH, "//h1[contains(@data-automation, 'job-detail-title')]").text                
+                item["position_name"] = driver.find_elements(By.XPATH, "//div/a[contains(@data-automation, 'jobTitle')]")
+                item["role"]=driver.find_element(By.XPATH, "//h1[contains(@data-automation, 'job-detail-title')]").text
                 #mendapatkan nama perusahaan
                 item["company"]=driver.find_element(By.XPATH, "//span[contains(@data-automation, 'advertiser-name')]").text
                 item["job_detail_classification"]=driver.find_element(By.XPATH, "//span[contains(@data-automation, 'job-detail-classifications')]//a").text
-                # descs=[]
                 xpath_keywords=(
                     "//div[contains(@data-automation, 'jobAdDetails')]//p["
                     "contains(., 'Kualifikasi') or "
@@ -206,9 +214,6 @@ def scrap_jobstreet(main_url):
                 )
                 minimum_qualifications=driver.find_elements(By.XPATH, xpath_keywords)
                 item["minimum_qualifications"]=[element.text.strip() for element in minimum_qualifications if element.text.strip()]
-                dateposted_path = "//span[contains(., 'Diposting') or contains(., 'Posted')]"
-                date_posted=driver.find_element(By.XPATH, dateposted_path).text
-                item["date_Posted_string"]=date_posted
                 XPATH_DESC_2 = (
                     "//div[contains(@data-automation, 'jobAdDetails')]"
                 )

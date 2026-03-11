@@ -39,13 +39,16 @@ def kalibrr_transform(spark):
         F.col("syarat_pendidikan").alias("minimum_educcation"),
         F.col("industry"),
         F.col("is_business_verified").cast(LongType()),
-        F.to_date(F.col("date_posted")).alias("date_posted"),
-        # F.current_timestamp().alias("processed_at")
+        F.to_date(F.col("date_posted")).alias("date_posted")
     ).dropDuplicates(["link"])
     write_to_sql_server(cleaned_df, "stg_kalibrr_raw")
 
 def jobstreet_transform(spark):
     df = spark.read.option("mergeSchema", "true").parquet("s3a://job-market-jobstreet-raw/*.parquet")
+    extract_digit = F.coalesce(
+        F.regexp_extract(F.col("date_posted_raw"), r"(\d+)", 1).cast("int"),
+        F.lit(0)
+    )
     cleaned_df = df.select(
         F.col("link"),
         F.col("site2").alias("source_site"),
@@ -56,7 +59,18 @@ def jobstreet_transform(spark):
         F.col("job_detail_classification"),
         F.concat_ws("\n", F.col("minimum_qualifications")).alias("minimum_qualifications"),
         F.col("all_description").alias("job_description"),
-        F.expr("date_sub(current_date(), cast(regexp_extract(date_posted_string, '(\\d+)', 1) as int))").alias("date_posted"),
-        # F.current_timestamp().alias("processed_at")
+        F.col("date_posted_raw").alias("date_posted_raw"),
+        F.when(
+            F.col("date_posted_raw").rlike("jam|menit|detik|hour|minute|second"),
+            F.current_date()
+        ).when(
+            F.col("date_posted_raw").rlike("day|hari"),
+            F.date_sub(F.current_date(), extract_digit)
+        ).when(
+            F.col("date_posted_raw").rlike("bulan|month"),
+            F.date_sub(F.current_date(), extract_digit * 30)
+        ).otherwise(
+            F.current_date()
+        ).alias("date_posted")
     ).dropDuplicates(["link"])
     write_to_sql_server(cleaned_df, "stg_jobstreet_raw")

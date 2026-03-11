@@ -1,0 +1,16 @@
+2026/03/09-08:57:07.761 2cb4 Reusing MANIFEST /app/scrapper/C:\Users\royra\job-market-analyzer\chrome_profile/Default/Local Storage/leveldb/MANIFEST-000001
+2026/03/09-08:57:07.840 2cb4 Recovering log #80
+2026/03/09-08:57:07.842 2cb4 Level-0 table #83: started
+2026/03/09-08:57:07.865 2cb4 Level-0 table #83: 17280 bytes OK
+2026/03/09-08:57:07.871 2cb4 Recovering log #82
+2026/03/09-08:57:07.874 2cb4 Reusing old log /app/scrapper/C:\Users\royra\job-market-analyzer\chrome_profile/Default/Local Storage/leveldb/000082.log 
+2026/03/09-08:57:07.895 2cb4 Delete type=0 #80
+2026/03/09-08:57:07.898 2cb8 Compacting 4@0 + 1@1 files
+2026/03/09-08:57:07.925 2cb8 Generated table #84@0: 33 keys, 10682 bytes
+2026/03/09-08:57:07.926 2cb8 Compacted 4@0 + 1@1 files => 10682 bytes
+2026/03/09-08:57:07.931 2cb8 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/03/09-08:57:07.950 2cb8 Delete type=2 #74
+2026/03/09-08:57:07.951 2cb8 Delete type=2 #76
+2026/03/09-08:57:07.952 2cb8 Delete type=2 #79
+2026/03/09-08:57:07.952 2cb8 Delete type=2 #81
+2026/03/09-08:57:07.953 2cb8 Delete type=2 #83

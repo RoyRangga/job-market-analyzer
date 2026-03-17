@@ -26,12 +26,18 @@ url_jobstreet = "https://id.jobstreet.com/id/Data-jobs"
 
 try:
     data_kaliber = scrapping_kaliber(main_url=url_kaliber)
-    file_name = f"kalibrr_raw_{datetime.now().strftime('%Y%m%d_%H%M%S')}.parquet"
-    upload_minIO(data_kaliber, 'job-market-kalibrr-raw', file_name)
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    # path_minIO = f"s3a://job-market-kalibrr-raw/{current_date}/data.parquet"
+    bucket_name_klbr = 'job-market-kalibrr-raw'
+    file_name = f"{current_date}/kalibrr_raw_{datetime.now().strftime('%Y%m%d_%H%M%S')}.parquet"
+    upload_minIO(data_kaliber, bucket_name_klbr, file_name)
 
     data_jobstreet = scrapping_jobstreet(main_url=url_jobstreet)
-    file_name = f"jobstreet_raw_{datetime.now().strftime('%Y%m%d_%H%M%S')}.parquet"
-    upload_minIO(data_jobstreet, 'job-market-jobstreet-raw', file_name)
+    path_minIO = f"s3a://job-market-jobstreet-raw/{current_date}/data.parquet"
+    file_name = f"{current_date}/jobstreet_raw_{datetime.now().strftime('%Y%m%d_%H%M%S')}.parquet"
+    # upload_minIO(data_jobstreet, 'job-market-jobstreet-raw', file_name)
+    bucket_name_jbstr = 'job-market-jobstreet-raw'
+    upload_minIO(data_jobstreet, bucket_name_jbstr, file_name)
 
     # 3. Print hasil (Opsional, hanya untuk cek)
     print(f"Berhasil mengambil {len(data_kaliber)} data dari Kalibrr")

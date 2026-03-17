@@ -1,3 +1,3 @@
-2026/03/11-08:36:14.291 4510 Reusing MANIFEST /app/C:\Users\royra\job-market-analyzer\chrome_profile/Default/WebStorage/3/IndexedDB/indexeddb.leveldb/MANIFEST-000001
-2026/03/11-08:36:14.300 4510 Recovering log #3
-2026/03/11-08:36:14.314 4510 Reusing old log /app/C:\Users\royra\job-market-analyzer\chrome_profile/Default/WebStorage/3/IndexedDB/indexeddb.leveldb/000003.log 
+2026/03/17-02:17:21.846 59d Reusing MANIFEST /app/C:\Users\royra\job-market-analyzer\chrome_profile/Default/WebStorage/3/IndexedDB/indexeddb.leveldb/MANIFEST-000001
+2026/03/17-02:17:21.864 59d Recovering log #3
+2026/03/17-02:17:21.903 59d Reusing old log /app/C:\Users\royra\job-market-analyzer\chrome_profile/Default/WebStorage/3/IndexedDB/indexeddb.leveldb/000003.log 

@@ -9,9 +9,10 @@ import time
 import pandas as pd
 import re
 import urllib
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text, Table, Column, String, MetaData, inspect
 import boto3
 import io
+import requests
 # import pyspark
 
 def get_sql_engine():
@@ -45,11 +46,13 @@ def upload_to_minio(data, bucket_name, object_name):
         df[col] = df[col].apply(lambda x: "\n".join(x) if isinstance(x, list) else x)
     #upload to the minio
     try:
-        parquet_buffer = df.to_parquet(index=False, engine='pyarrow')
+        parquet_buffer = io.BytesIO()
+        df.to_parquet(parquet_buffer, index=False, engine='pyarrow')
+        parquet_buffer.seek(0)
         s3_client.put_object(
             Bucket=bucket_name,
             Key=object_name,
-            Body=parquet_buffer,
+            Body=parquet_buffer.getvalue(),
             ContentType='application/octet-stream'
         )
     except Exception as e:
@@ -225,6 +228,342 @@ def scrap_jobstreet(main_url):
         print(f"error pada penarikan data joob street: {e}")
     time.sleep(2)
     return list_jobs
-
 #proses data scrapping
 
+def extract_hard_skill(text):
+    OLLAMA_URL = "http://ollama:11434/api/generate"
+    OLLAMA_MODEL = "llama3.2"
+    if not text or pd.isna(text):
+        return None
+    prompt = f"""Extract only technical hard skills (tools, programming languages, certifications) from the text below.
+    Output: Comma-separated list only. No intro, no commentary.
+    Text: {text}"""    
+    playload = {
+        'model':OLLAMA_MODEL,
+        'prompt':prompt, 
+        'stream':False,
+        'options':{
+            'temperature':0
+        }
+    }
+    try:
+        response = requests.post(OLLAMA_URL, json=playload, timeout=300)
+        if response.status_code == 200:
+            result = response.json().get('response', '').replace('\n', ', ').strip('- ').strip()
+            print(f"Hasil Ekstraksi: {result}")
+            return result
+        else:
+            print(f"Ollama Error {response.status_code}: {response.text}")
+            return None
+    except Exception as e:
+        print(f"Error Ollama: {e}")
+        return None
+
+def extract_education_req(text):
+    OLLAMA_URL = "http://ollama:11434/api/generate"
+    OLLAMA_MODEL = "llama3.2"
+    if not text or pd.isna(text):
+        return None
+    
+    system_prompt = (
+        "You are a strict data cleaner. Your task is to extract ONLY the education LEVEL. "
+        "STRICT RULES:\n"
+        "1. NO majors, NO departments, NO subjects (e.g., delete 'in Computer Science', 'Akuntansi', etc.)\n"
+        "2. ONLY keep: S1, S2, D3, SMA, Bachelor, Master, Diploma, Degree, or equivalent.\n"
+        "3. If the text says 'Bachelor degree in IT', output ONLY 'Bachelor Degree'.\n"
+        "4. Output must be short. No sentences."
+        "5. If you find no education level, respond with 'Not Specified'. "
+        "6. Strictly prohibited: introductory text, headers, lists, or explanation. "
+        "7. Do not say 'Here is' or 'The level is'."
+    )
+    
+    # Kita berikan contoh "Input -> Output" agar AI paham pola pemotongannya
+    user_prompt = f"""Task: Extract level only (S1/D3/Bachelor/etc). No major.
+                        Text: "Bachelor's degree in Information Systems or Informatics Engineering"
+                        Output: Bachelor's Degree
+
+                        Text: "Diploma sederajat, D3/S1 Akuntansi atau Manajemen"
+                        Output: D3, S1
+
+                        Text: "Minimal S1 Psikologi"
+                        Output: S1
+
+                        Text: "{text}"
+                        Output:"""
+
+    full_prompt = f"System: {system_prompt}\nUser: {user_prompt}"
+    playload = {
+        'model':OLLAMA_MODEL,
+        'prompt':full_prompt,
+        'stream':False,
+        'options':{
+            'temperature':0,
+            'stop': ["\n", "Note:", "Here is", "1.", "Here are"]
+        }
+    }
+    try:
+        response = requests.post(OLLAMA_URL, json=playload, timeout=300)
+        if response.status_code == 200:
+            result = response.json().get('response', '')
+            print(f"hasil ekstraksi: {result}")
+            return result
+        else:
+            print(f"Ollama Error {response.status_code}: {response.text}")
+            return None
+    except Exception as e:
+        print(f"Error Ollama: {e}")
+        return None
+
+def process_skill_enrinchment():
+    # enginge for sql server
+    src_engine = create_engine('mssql+pyodbc://sa:YourStrongPassword123!@sql-server:1433/Job_analyzer?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes')
+    # engine for postgre
+    dest_engine = create_engine('postgresql://postgres2:adminpassword@postgres_db:5432/job_market_db')
+    # pulling data from sql server
+
+    print("Membaca data staging dari SQL Server")
+    metadata = MetaData()
+    table_name = 'clean_job_skills'
+    # make sure 'link' menjadi primary key (dan otomatis bertipe Text/String)
+    job_skills_table = Table(
+        table_name, metadata,
+        Column('link', String, primary_key=True),
+        Column('hard_skills', String)
+    )
+    # create table if it doesn't exist
+    metadata.create_all(dest_engine)
+    print(f"pengecekan table {table_name} selesai...")
+    query = """
+        SELECT link, minimum_qualifications
+        FROM stg_jobstreet_raw
+        UNION ALL
+        SELECT link, minimum_qualifications
+        FROM stg_kalibrr_raw
+    """
+    df = pd.read_sql(query, src_engine)
+    # read the existing links
+    try:
+        Existing_links = pd.read_sql(f"SELECT link from {table_name} ", dest_engine)['link'].to_list()
+    except Exception:
+        Existing_links = []
+
+    df_to_process = df[~df['link'].isin(Existing_links)]
+    total_process = len(df_to_process)
+
+    print(f"total data di staging: {len(df)}")
+    print(f"data yang sudah pernah diproses: {len(Existing_links)}")
+    print(f"memulai extraksi AI untuk {total_process} data baru...")
+
+    for i, (index, row) in enumerate(df_to_process.iterrows(),1):
+        skills = extract_hard_skill(row['minimum_qualifications'])
+        # proses ekstraksi
+        if skills:
+            single_row_df = pd.DataFrame([{'link':row['link'], 'hard_skills':skills}])
+            try:
+                # simpan data ke postgres
+                print("menyimpan ke Postgres")
+                single_row_df.to_sql(table_name, dest_engine, if_exists='append', index=False)
+                print(f"[{i}/{total_process}] ✅ Berhasil : {row['link'][:30]}...")
+            except Exception as e:
+                print(f"[{i}/{total_process}] ❌ Gagal simpan: {e}")
+
+def process_education_enrinchment():
+    src_engine = create_engine('mssql+pyodbc://sa:YourStrongPassword123!@sql-server:1433/Job_analyzer?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes')
+    dest_engine = create_engine('postgresql://postgres2:adminpassword@postgres_db:5432/job_market_db')
+    print("membaca data staging dari sql server")
+    metadata = MetaData()
+    table_name = 'clean_education'
+    education_table = Table(
+        table_name, metadata,
+        Column('link', String, primary_key=True),
+        Column('education', String)
+    )
+    metadata.create_all(dest_engine)
+    print(f"pengecekan table {table_name} selesai")
+    query = """
+            SELECT link, minimum_qualifications
+            FROM stg_jobstreet_raw
+            UNION ALL
+            SELECT link, minimum_qualifications
+            FROM stg_kalibrr_raw;
+            """
+    df = pd.read_sql(query, src_engine)
+    try:
+        existing_links = pd.read_sql(f"SELECT link FROM {table_name}", dest_engine)['link'].to_list()
+    except Exception as e:
+        existing_links = []
+    df_to_process = df[~df['link'].isin(existing_links)]
+    total_processed = len(df_to_process)
+    print(f"total data di staging: {len(df)}")
+    print(f"data yang sudah pernah diproses: {len(df_to_process)}")
+    print(f"memulai extraksi AI untuk {total_processed} data baru...")
+
+    for i, (index, row) in enumerate(df_to_process.iterrows(), 1):
+        edu = extract_education_req(row["minimum_qualifications"])
+        if edu:
+            singgle_row_df = pd.DataFrame({'link':row['link'], 'education':[edu]})
+            try:
+                print("menyimpan ke Postgres")
+                singgle_row_df.to_sql(table_name, dest_engine, if_exists='append', index=False)
+                print(f"[{i}/{total_processed}] ✅ Berhasil : {row['link'][:30]}...")
+            except Exception as e:
+                print(f"[{i}/{total_processed}] ❌ Gagal simpan: {e}")                
+
+def extract_major(text):
+    OLLAMA_URL = "http://ollama:11434/api/generate"
+    OLLAMA_MODEL = "llama3.2"
+    if not text or pd.isna(text):
+        return None
+    system_prompt = """You are an expert and strict data cleaner. Your task is to extract ONLY the major or discipline names.
+                        STRICT RULES:
+                        1. NO degree levels (remove S1, S2, D3, Bachelor, Master, etc.).
+                        2. NO introductory text, explanations, or notes.
+                        3. If no specific major is mentioned, output 'Any Major'.
+                        4. Separate multiple majors with a comma.
+                        5. Output ONLY the names of the disciplines.
+                        6. Do Not include sentence 'I can help you with that'.
+                        7. If no major is found, output 'Not Specified'.
+                        """
+    user_prompt = f"""
+                TASK: Extract only Major/Discipline names.
+                Input: Pendidikan S-1, dengan jurusan MIPA (Matematika/ Fisika) atau IT: Teknik Komputer -> Output: MIPA, IT, Teknik Komputer
+
+                Input: Pendidikan minimal S1 Teknik Industri atau S1 Statistika -> Output: Teknik Industri, Statistika
+
+                Input: Bachelor's degree in Information Systems, Computer Science, or Informatics Engineering -> Output: Information Systems, Computer Science, Informatics Engineering
+
+                Input: Minimum Bachelor's degree Strong proficiency in Excel -> Output: Any Major
+
+                Input: Pendidikan minimal SMA/SMK sederajat / Diploma (Fresh Graduate dipersilakan melamar) -> Output: Any Major
+
+                Input: {text} -> Output: """
+
+    full_prompt = f"System: {system_prompt} \n User: {user_prompt}"
+
+    playload = {
+        'model': OLLAMA_MODEL,
+        'prompt': full_prompt,
+        'stream': False,
+        'options':{
+            'temperature': 0,
+            'stop': ["\n", "System:", "User:", "Input:", "I can", "I'll"]
+        }
+    }
+    response = requests.post(OLLAMA_URL, json=playload, timeout=300)
+    try:
+        if response.status_code == 200:
+            result = response.json().get('response','')
+            return result
+        else:
+            print(f"OLLAMA ERROR: {response.status_code} : {response.text}")
+            return None
+    except Exception as e:
+        print(f"ERROR: {e}")
+        return None
+
+def process_major_enrinchment():
+    src_engine = create_engine('mssql+pyodbc://sa:YourStrongPassword123!@sql-server:1433/Job_analyzer?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes')
+    dest_engine = create_engine('postgresql://postgres2:adminpassword@postgres_db:5432/job_market_db')
+    print("membaca data staging")
+    metadata = MetaData()
+    table_name = 'clean_major_tb'
+    major_table = Table(
+        table_name,
+        metadata,
+        Column('link', String, primary_key=True),
+        Column('major', String)
+    )
+    metadata.create_all(dest_engine)
+    print(f"pengecekan table {table_name} selesai")
+    query = """
+        SELECT link, minimum_qualifications
+        FROM stg_jobstreet_raw
+        UNION ALL
+        SELECT link, minimum_qualifications
+        FROM stg_kalibrr_raw;
+        """
+    df = pd.read_sql(query, src_engine)
+    try:
+        Existing_links = pd.read_sql(f"SELECT link from {table_name}", dest_engine).to_list()
+    except:
+        Existing_links = []
+
+    df_processed = df[~df['link'].isin(Existing_links)]
+    total_processed = len(df_processed)
+
+    print(f"total data di staging: {len(df)}")
+    print(f"data yang sudah pernah diproses: {len(Existing_links)}")
+    print(f"memulai extraksi AI untuk {total_processed} data baru...")
+    
+    for i, (index, row) in enumerate(df_processed.iterrows(),1):
+        major = extract_major(row['minimum_qualifications'])
+        if major:
+            single_row_df = pd.DataFrame({'link':row['link'], 'major':[major]})
+            try:
+                print("import data ke postgres")
+                single_row_df.to_sql(table_name, dest_engine, if_exists='append', index=False)
+                print(f"[{i}/{total_processed}] ✅ Berhasil : {row['link'][:30]}...")
+            except Exception as e:
+                print(f"[{i}/{total_processed}] ❌ Gagal simpan: {e}")  
+
+def extract_exp_yr(text):
+    if not text:
+        return "Not Specified"
+    
+    pattern_range_tahun = r"\d+\s?[\-\–\—\−]\s?\d+\s?tahun"
+    pattern_range_years = r"\d+\s?[\-\–\—\−]\s?\d+\s?years"
+    pattern_plus_tahun = r"\d+\s?[\+]\s?tahun"
+    pattern_tahun = r"\d+\s?tahun"
+    pattern_years = r"\d+\s?years"
+    master_pattern = f"{pattern_range_tahun}|{pattern_range_years}|{pattern_plus_tahun}|{pattern_tahun}|{pattern_years}"
+
+    matches = re.search(master_pattern, text, re.IGNORECASE)
+
+    if not matches:
+        return "Not Specified"
+    
+    return matches.group()
+
+def process_exp_yr():
+    src_engine = create_engine('mssql+pyodbc://sa:YourStrongPassword123!@sql-server:1433/Job_analyzer?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes')
+    dest_engine = create_engine('postgresql://postgres2:adminpassword@postgres_db:5432/job_market_db')
+    print("membaca data staging")
+    metadata = MetaData()
+    table_name = 'exp_tb_clean'
+    exp_table = Table(
+        table_name, metadata,
+        Column('link', String, primary_key=True),
+        Column('min_exp', String)
+    )
+    metadata.create_all(dest_engine)
+    print(f"pengecekan table {table_name} selesai...")
+    query = """
+        SELECT link, minimum_qualifications
+        FROM stg_jobstreet_raw
+        UNION ALL
+        SELECT link, minimum_qualifications
+        FROM stg_kalibrr_raw;
+        """
+    df = pd.read_sql(query, src_engine)
+    try:
+        Existing_links = pd.read_sql(f"SELECT link from {table_name}", dest_engine)['link'].to_list()
+    except:
+        Existing_links = []
+    df_processed = df[~df['link'].isin(Existing_links)]
+    total_processed = len(df_processed)
+    print(f"total data di staging: {len(df)}")
+    print(f"data yang sudah pernah diproses: {len(Existing_links)}")
+    print(f"memulai extraksi AI untuk {total_processed} data baru...")
+
+    for i, (index, row) in enumerate(df_processed.iterrows(), 1):
+        exp = extract_exp_yr(row['minimum_qualifications'])
+        if exp:
+            single_row_df = pd.DataFrame({'link':[row['link']], 'min_exp':[exp]})
+            try:
+                single_row_df.to_sql(table_name, dest_engine, if_exists='append', index=False)
+                print(f"[{i}/{total_processed}] ✅ Berhasil : {row['link'][:30]}...")
+            except Exception as e:
+                print(f"[{i}/{total_processed}] ❌ Gagal simpan: {e}") 
+
+if __name__ == '__main__':
+    process_exp_yr()

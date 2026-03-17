@@ -31,11 +31,12 @@ services:
     image: postgres:15
     container_name: postgres_db
     environment:
-      - POSTGRES_USER=admin
+      - POSTGRES_USER=postgres2
       - POSTGRES_PASSWORD=adminpassword
       - POSTGRES_DB=job_market_db
+      - POSTGRES_HOST_AUTH_METHOD=trust
     ports:
-      - "5432:5432"
+      - "5433:5432"
     networks:
       - de-network
 
@@ -92,9 +93,20 @@ services:
     networks:
       - de-network
 
+  # 7. Ollama
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - de-network
+
 networks:
   de-network:
     driver: bridge
 
-# volumes:
-#   mssql_data
+volumes:
+  ollama_data:

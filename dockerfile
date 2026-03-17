@@ -6,6 +6,7 @@ USER root
 # 1. Install System Dependencies & Java (jika belum ada)
 RUN apt-get update && apt-get install -y \
     wget gnupg unzip curl gnupg2 ca-certificates procps \
+    libpq-dev gcc python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Install Google Chrome (Untuk Selenium)

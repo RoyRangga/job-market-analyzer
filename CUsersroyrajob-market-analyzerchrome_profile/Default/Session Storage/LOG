@@ -1,3 +1,6 @@
-2026/03/11-08:35:28.932 4537 Reusing MANIFEST /app/C:\Users\royra\job-market-analyzer\chrome_profile/Default/Session Storage/MANIFEST-000001
-2026/03/11-08:35:28.968 4537 Recovering log #9
-2026/03/11-08:35:28.972 4537 Reusing old log /app/C:\Users\royra\job-market-analyzer\chrome_profile/Default/Session Storage/000009.log 
+2026/03/17-02:14:21.761 5c4 Reusing MANIFEST /app/C:\Users\royra\job-market-analyzer\chrome_profile/Default/Session Storage/MANIFEST-000001
+2026/03/17-02:14:21.795 5c4 Recovering log #16
+2026/03/17-02:14:21.800 5c4 Reusing old log /app/C:\Users\royra\job-market-analyzer\chrome_profile/Default/Session Storage/000016.log 
+2026/03/17-02:15:00.839 5c4 Level-0 table #20: started
+2026/03/17-02:15:00.858 5c4 Level-0 table #20: 15570 bytes OK
+2026/03/17-02:15:00.877 5c4 Delete type=0 #16

@@ -1,5 +1,14 @@
-2026/03/11-08:34:01.526 4442 Reusing MANIFEST /app/C:\Users\royra\job-market-analyzer\chrome_profile/Default/Local Storage/leveldb/MANIFEST-000001
-2026/03/11-08:34:01.554 4442 Recovering log #128
-2026/03/11-08:34:01.556 4442 Level-0 table #131: started
-2026/03/11-08:34:01.567 4442 Level-0 table #131: 17902 bytes OK
-2026/03/11-08:34:01.590 4442 Delete type=0 #128
+2026/03/17-02:13:13.543 4f5 Reusing MANIFEST /app/C:\Users\royra\job-market-analyzer\chrome_profile/Default/Local Storage/leveldb/MANIFEST-000001
+2026/03/17-02:13:13.598 4f5 Recovering log #251
+2026/03/17-02:13:13.600 4f5 Level-0 table #254: started
+2026/03/17-02:13:13.612 4f5 Level-0 table #254: 20733 bytes OK
+2026/03/17-02:13:13.636 4f5 Delete type=0 #251
+2026/03/17-02:13:13.638 4f8 Compacting 4@0 + 1@1 files
+2026/03/17-02:13:13.663 4f8 Generated table #256@0: 45 keys, 13442 bytes
+2026/03/17-02:13:13.663 4f8 Compacted 4@0 + 1@1 files => 13442 bytes
+2026/03/17-02:13:13.670 4f8 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/03/17-02:13:13.691 4f8 Delete type=2 #245
+2026/03/17-02:13:13.692 4f8 Delete type=2 #248
+2026/03/17-02:13:13.693 4f8 Delete type=2 #250
+2026/03/17-02:13:13.693 4f8 Delete type=2 #252
+2026/03/17-02:13:13.694 4f8 Delete type=2 #254

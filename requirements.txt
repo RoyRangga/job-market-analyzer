@@ -1,4 +1,10 @@
 pandas
-selenium
-sqlalchemy
+boto3
+pyarrow
 pyodbc
+sqlalchemy
+selenium
+webdriver-manager
+pyspark
+requests
+psycopg2-binary

@@ -1,6 +1,7 @@
 # Python bytecode
 __pycache__/
 *.py[cod]
+.pytest_cache/
 
 # Environments
 .env
@@ -10,6 +11,9 @@ env/
 # Chrome profiles & local data
 chrome_profile/
 **/chrome_profile/
+spark-warehouse/
+logs/
+dbt_transformation/logs/
 
 # Temporary office files
 ~$*.docx
@@ -19,3 +23,4 @@ chrome_profile/
 *.csv
 *.json
 *.pyc
+hasil_scrapping.csv

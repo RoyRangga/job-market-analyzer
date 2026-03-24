@@ -5,6 +5,8 @@ pyodbc
 sqlalchemy
 selenium
 webdriver-manager
-pyspark
+pyspark==3.3.4
 requests
 psycopg2-binary
+dbt-core
+dbt-postgres

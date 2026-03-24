@@ -1,0 +1,34 @@
+FROM apache/airflow:2.7.1-python3.9
+
+USER root
+
+# 1. Install System Dependencies & Java 17 (Langsung Java 17 biar PySpark aman)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget gnupg unzip curl ca-certificates procps \
+    libpq-dev gcc g++ build-essential openjdk-17-jre-headless \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Install Google Chrome (Untuk Selenium)
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update && apt-get install -y google-chrome-stable \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# 3. Install Microsoft ODBC Driver 18 (Untuk SQL Server)
+RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
+    && curl -fsSL https://packages.microsoft.com/config/debian/11/prod.list | tee /etc/apt/sources.list.d/mssql-release.list \
+    && apt-get update \
+    && ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# 4. Set JAVA_HOME ke Java 17 agar PySpark tidak error!
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+
+USER airflow
+
+# 5. Install semua library Python dari file requirements.txt
+COPY requirements.txt /requirements.txt
+RUN pip install --no-cache-dir -r /requirements.txt

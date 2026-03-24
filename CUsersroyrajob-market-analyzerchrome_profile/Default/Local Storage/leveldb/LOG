@@ -1,9 +1,11 @@
-2026/03/17-02:14:21.760 5c1 Reusing MANIFEST /app/C:\Users\royra\job-market-analyzer\chrome_profile/Default/Local Storage/leveldb/MANIFEST-000001
-2026/03/17-02:14:21.796 5c1 Recovering log #255
-2026/03/17-02:14:21.800 5c1 Reusing old log /app/C:\Users\royra\job-market-analyzer\chrome_profile/Default/Local Storage/leveldb/000255.log 
-2026/03/17-02:15:21.954 5c4 Level-0 table #259: started
-2026/03/17-02:15:21.963 5c4 Level-0 table #259: 23411 bytes OK
-2026/03/17-02:15:21.978 5c4 Delete type=0 #255
-2026/03/17-02:17:22.773 5c4 Level-0 table #261: started
-2026/03/17-02:17:22.792 5c4 Level-0 table #261: 20516 bytes OK
-2026/03/17-02:17:22.806 5c4 Delete type=0 #258
+2026/03/23-12:21:26.182 21a Reusing MANIFEST /app/C:\Users\royra\job-market-analyzer\chrome_profile/Default/Local Storage/leveldb/MANIFEST-000001
+2026/03/23-12:21:26.216 21a Recovering log #430
+2026/03/23-12:21:26.221 21a Reusing old log /app/C:\Users\royra\job-market-analyzer\chrome_profile/Default/Local Storage/leveldb/000430.log 
+2026/03/23-12:23:01.931 21c Level-0 table #434: started
+2026/03/23-12:23:01.955 21c Level-0 table #434: 25461 bytes OK
+2026/03/23-12:23:01.994 21c Delete type=0 #430
+2026/03/23-12:23:26.727 21c Level-0 table #436: started
+2026/03/23-12:23:26.740 21c Level-0 table #436: 21131 bytes OK
+2026/03/23-12:23:26.762 21c Delete type=0 #433
+2026/03/23-12:23:51.940 22f Level-0 table #438: started
+2026/03/23-12:23:51.971 22f Level-0 table #438: 18486 bytes OK

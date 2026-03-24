@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: internal_postgres_data
+    database: job_market_db
+    schema: public
+    tables:
+      - name: clean_education
+      - name: clean_job_skills
+      - name: clean_major_tb
+      - name: exp_tb_clean
+      - name: remain_tb

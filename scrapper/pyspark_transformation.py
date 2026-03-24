@@ -1,10 +1,14 @@
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import LongType
-from datetime import datetime
 import pandas as pd
 import os
-
+from datetime import datetime, timedelta
+import time
+import argparse
+url_kaliber = "https://www.kalibrr.id/id-ID/home/te/data"
+url_jobstreet = "https://id.jobstreet.com/id/Data-jobs"
+os.environ["JAVA_HOME"] = "/usr/lib/jvm/java-17-openjdk-amd64"
 os.environ['PYSPARK_SUBMIT_ARGS'] = (
     '--packages org.apache.hadoop:hadoop-aws:3.3.4,'
     'com.amazonaws:aws-java-sdk-bundle:1.12.262,'
@@ -12,11 +16,22 @@ os.environ['PYSPARK_SUBMIT_ARGS'] = (
     'pyspark-shell'
 )
 
+# spark = SparkSession.builder \
+#     .appName("JobMarketTransformation") \
+#     .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,com.microsoft.sqlserver:mssql-jdbc:12.2.0.jre8") \
+#     .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000") \
+#     .config("spark.hadoop.fs.s3a.access.key", "minioadmin") \
+#     .config("spark.hadoop.fs.s3a.secret.key", "minioadmin") \
+#     .config("spark.hadoop.fs.s3a.path.style.access", "true") \
+#     .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
+#     .getOrCreate()
+
+
 def write_to_sql_server(spark, cleaned_df, table_name):
     jdbc_url = "jdbc:sqlserver://sql-server:1433;databaseName=Job_analyzer;encrypt=true;trustServerCertificate=true;"
     connection_properties = {
         "user":"sa",
-        "password":"YourStrongPassword123!",
+        "password":"<YOUR_PASSWORD>",
         "driver":"com.microsoft.sqlserver.jdbc.SQLServerDriver"
     }
     try:
@@ -70,16 +85,18 @@ def kalibrr_transform(spark):
     cleaned_df = df.select(
         F.col("link"),
         F.col("site2").alias("source_site"),
-        F.col("location"),
-        F.col("role"),
-        F.col("job_type"),
+        F.lower(F.col("location")).alias("location"),
+        F.lower(F.col("role")).alias("role"),
+        F.lower(F.col("salary")).alias("salary"),
+        F.lower(F.col("company")).alias("company"),
+        F.lower(F.col("job_type")).alias("job_type"),
         F.concat_ws("\n", F.col("description")).alias("job_description"),
         F.concat_ws("\n", F.col("minimum_qualifications")).alias("minimum_qualifications"),
-        F.col("position"),
-        F.col("spesialisasi").alias("specialization"),
+        F.lower(F.col("position")).alias("position"),
+        F.lower(F.col("spesialisasi")).alias("specialization"),
         F.col("syarat_pendidikan").alias("minimum_educcation"),
-        F.col("industry"),
-        F.col("is_business_verified").cast(LongType()),
+        F.lower(F.col("industry")).alias("industry"),
+        # F.col("is_business_verified").cast(IntegerType()).alias("is_business_verified"),
         F.to_date(F.col("date_posted")).alias("date_posted")
     ).dropDuplicates(["link"])
     write_to_sql_server(spark, cleaned_df, "stg_kalibrr_raw")
@@ -93,11 +110,12 @@ def jobstreet_transform(spark):
     )
     cleaned_df = df.select(
         F.col("link"),
-        F.col("site2").alias("source_site"),
-        F.col("location"),
-        F.col("role"),
-        F.col("company"),
-        F.col("job_type"),
+        F.lower(F.col("site2")).alias("source_site"),
+        F.lower(F.col("location")).alias("location"),
+        F.lower(F.col("role")).alias("role"),
+        F.col("salary"),
+        F.lower(F.col("company")).alias("company"),
+        F.lower(F.col("job_type")).alias("job_type"),
         F.col("job_detail_classification"),
         F.concat_ws("\n", F.col("minimum_qualifications")).alias("minimum_qualifications"),
         F.col("all_description").alias("job_description"),
@@ -116,3 +134,32 @@ def jobstreet_transform(spark):
         ).alias("date_posted")
     ).dropDuplicates(["link"])
     write_to_sql_server(spark, cleaned_df, "stg_jobstreet_raw")
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description="Run Pyspark Transformation for Kalibrr or Jobstreet")
+    parser.add_argument(
+        '--source',
+        type=str,
+        required=True,
+        choices=['kalibrr', 'jobstreet'],
+        help="pilih sumber data: 'kalibrr' atau 'jobstreet' "
+    )
+    args = parser.parse_args()
+
+    spark = SparkSession.builder \
+        .appName("JobMarketTransformation") \
+        .config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:3.3.4,com.amazonaws:aws-java-sdk-bundle:1.12.262,com.microsoft.sqlserver:mssql-jdbc:12.2.0.jre8") \
+        .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000") \
+        .config("spark.hadoop.fs.s3a.access.key", "minioadmin") \
+        .config("spark.hadoop.fs.s3a.secret.key", "minioadmin") \
+        .config("spark.hadoop.fs.s3a.path.style.access", "true") \
+        .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
+        .getOrCreate()
+
+    if args.source == 'kalibrr':
+        kalibrr_transform(spark)
+    elif args.source == 'jobstreet':
+        jobstreet_transform(spark)
+
+    spark.stop()

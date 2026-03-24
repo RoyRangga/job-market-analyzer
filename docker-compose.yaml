@@ -22,7 +22,7 @@ services:
       - "1433:1433"
     environment:
       - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=YourStrongPassword123!
+      - MSSQL_SA_PASSWORD=<YOUR_PASSWORD>
     networks:
       - de-network
   
@@ -31,9 +31,9 @@ services:
     image: postgres:15
     container_name: postgres_db
     environment:
-      - POSTGRES_USER=postgres2
-      - POSTGRES_PASSWORD=adminpassword
-      - POSTGRES_DB=job_market_db
+      - POSTGRES_USER=<YOUR_USERNAME>
+      - POSTGRES_PASSWORD=<YOUR_PASSWORD>
+      - POSTGRES_DB=<YOUR_DB>
       - POSTGRES_HOST_AUTH_METHOD=trust
     ports:
       - "5433:5432"
@@ -48,8 +48,8 @@ services:
       - "9000:9000" 
       - "9001:9001"
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_ROOT_USER=<YOUR_USERNAME>
+      - MINIO_ROOT_PASSWORD=<YOUR_PASSWORD>
     command: server /data --console-address ":9001"
     networks:
       - de-network
@@ -104,9 +104,41 @@ services:
     networks:
       - de-network
 
+  # 8. Airflow
+  airflow:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: airflow
+    # UID penting di Linux/WSL agar gak ada isu permission folder
+    user: "${AIRFLOW_UID:-1000}:0"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://<YOUR_USERNAME>:<YOUR_PASSWORD>@postgres_db:5432/<YOUR_DB>
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - _AIRFLOW_WWW_USER_CREATE=true
+      - _AIRFLOW_WWW_USER_USERNAME=<YOUR_USERNAME>
+      - _AIRFLOW_WWW_USER_PASSWORD=<YOUR_PASSWORD>
+      - _AIRFLOW_WWW_USER_ROLE=Admin
+      - _AIRFLOW_WWW_USER_EMAIL=admin@example.com
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./scrapper:/opt/airflow/scrapper
+      - ./dbt_transformation:/opt/airflow/dbt_transformation
+      # Sesuaikan path profiles.yml dbt kamu
+      - ~/.dbt:/home/airflow/.dbt 
+    ports:
+      - "8081:8080"
+    command: bash -c "airflow db upgrade && (airflow webserver & airflow scheduler)"
+    networks:
+      - de-network
+    depends_on:
+      - postgres_db
+
 networks:
   de-network:
     driver: bridge
 
 volumes:
   ollama_data:
+  mssql_data:

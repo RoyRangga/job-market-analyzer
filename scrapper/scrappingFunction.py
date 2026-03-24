@@ -14,14 +14,15 @@ import boto3
 import io
 import requests
 # import pyspark
-
+url_kaliber = "https://www.kalibrr.id/id-ID/home/te/data"
+url_jobstreet = "https://id.jobstreet.com/id/Data-jobs"
 def get_sql_engine():
     params = urllib.parse.quote_plus(
         "DRIVER={ODBC Driver 18 for SQL Server};"
         "SERVER=localhost;"
         "DATABASE=Job_Analyzer;"
         "UID=sa;"
-        "PWD=YourStrongPassword123!;"
+        "PWD=<YOUR_PASSWORD>;"
         "Encrypt=yes;"
         "TrustServerCertificate=yes;"
     )
@@ -70,6 +71,8 @@ def init_browser():
     options.add_argument('--disable-extensions')
     options.add_argument('--ignore-certificate-errors')
     options.add_argument('--allow-running-insecure-content')
+    # options.add_argument("--disable-blink-features=AutomationControlled")
+    # options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
 
     options.add_argument(r'--profile-directory=Default')
     options.add_argument(r'--user-data-dir=C:\Users\royra\job-market-analyzer\chrome_profile')
@@ -88,6 +91,21 @@ def scrape_kaliber(main_url):
     driver = init_browser()
     driver.get(main_url)
     time.sleep(3)
+
+    target_clicks = 2
+    for i in range(target_clicks):
+        try:
+            load_more_btn = WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.XPATH, "//button[normalize-space()='Load more jobs']"))
+            )
+            driver.execute_script("arguments[0].click();", load_more_btn)
+            print(f"berhasil klik button 'Load more jobs' ke-{i+1}")
+
+            time.sleep(4)
+
+        except Exception as e:
+            print(f"tombol Load more jobs sudah di klik sebanyak {i+1} kali")
+            break
 
     list_jobs=[]
     try:
@@ -112,7 +130,21 @@ def scrape_kaliber(main_url):
                 #retrieve data role
                 role=driver.find_element(By.XPATH, "//h1[contains(@itemprop, 'title')]")
                 item['role']=role.text
-                #tiper kerjaan
+                #salary
+                try:
+                    salary_list_str = driver.find_elements(By.XPATH, "//div[contains(@itemprop, 'baseSalary')]/preceding-sibling::span")
+                    salary_list = [i.get_attribute('textContent').replace('\xa0', ' ') for i in salary_list_str]
+                    salary_list = [i.get_attribute('textContent') for i in salary_list_str]
+                    salary = "".join(salary_list)
+                    if salary:
+                        item['salary'] = salary
+                    else:
+                        item['salary']='not specified'
+                except:
+                    item['salary']='not specified'
+                # company
+                item['company'] = driver.find_element(By.XPATH, "//h1[contains(@itemprop, 'title')]/following-sibling::span/a/h2").text
+                # tipe kerjaan
                 job_type=driver.find_element(By.XPATH, "//a[contains(@href, '/home/t/')]").text
                 item['job_type']=job_type
                 # mengambil deskripsi pekerjaan
@@ -190,14 +222,21 @@ def scrap_jobstreet(main_url):
                         EC.presence_of_element_located((By.XPATH, "//span[contains(@data-automation, 'job-detail-work-type')]/a"))
                     )
                     item["job_type"]= wait_element_job_type.text
-
                 except Exception as e:
                     print(f"gagal menarik data job_detail_work_type, karena: {e}")
                     item["job_type"] = "N/A"
+                # mengambil data posisi job
                 item["position_name"] = driver.find_elements(By.XPATH, "//div/a[contains(@data-automation, 'jobTitle')]")
+                # mengambil data role
                 item["role"]=driver.find_element(By.XPATH, "//h1[contains(@data-automation, 'job-detail-title')]").text
-                #mendapatkan nama perusahaan
+                # mengambil data gaji
+                try:
+                    item['salary']=driver.find_element(By.XPATH, "//span[contains(@data-automation, 'job-detail-salary')]").text
+                except:
+                    item['salary']='not specified'
+                # mendapatkan nama perusahaan
                 item["company"]=driver.find_element(By.XPATH, "//span[contains(@data-automation, 'advertiser-name')]").text
+                # mendapatkan detail job
                 item["job_detail_classification"]=driver.find_element(By.XPATH, "//span[contains(@data-automation, 'job-detail-classifications')]//a").text
                 xpath_keywords=(
                     "//div[contains(@data-automation, 'jobAdDetails')]//p["
@@ -215,6 +254,7 @@ def scrap_jobstreet(main_url):
                     "contains(., 'Requirements')"
                     "]/following::ol[1]//*[self::li or self::p]" #jalur 2 "ol"
                 )
+                # mengambil minimum kualifikasi
                 minimum_qualifications=driver.find_elements(By.XPATH, xpath_keywords)
                 item["minimum_qualifications"]=[element.text.strip() for element in minimum_qualifications if element.text.strip()]
                 XPATH_DESC_2 = (
@@ -235,12 +275,38 @@ def extract_hard_skill(text):
     OLLAMA_MODEL = "llama3.2"
     if not text or pd.isna(text):
         return None
-    prompt = f"""Extract only technical hard skills (tools, programming languages, certifications) from the text below.
-    Output: Comma-separated list only. No intro, no commentary.
-    Text: {text}"""    
+    system_prompt = (
+    "You are a strict data cleaner. Your task is to extract ONLY the HARD SKILLS. "
+    "STRICT RULES:\n"
+    "1. NO majors, NO departments, NO subjects (e.g., delete 'in Computer Science', 'Akuntansi', etc.)\n"
+    "2. ONLY keep: C#, Microsoft Azure, python, R, Excel, Kafka, Airflow, DBT, Microsoft Office, MongoDB, Tableau, or equivalent programming languate, Framework, Platform or Tools.\n"
+    # "3. If the text says 'Bachelor degree in IT', output ONLY 'Bachelor Degree'.\n"
+    "3. Output must be short. No sentences."
+    "4. If you find multiple output, separate with ','."
+    "5. If you find no hard skills or tools, respond with 'Not Specified'. "
+    "6. Strictly prohibited: introductory text, headers, lists, or explanation. "
+    "7. Do not say 'Here is' or 'Here are'."
+    )
+    user_prompt = f"""Task: HARD SKILLS only (Programming languate/ tools/ framework). No major, No degree.
+                        Text: "Design, build, and maintain scalable ETL/ELT data pipelines to process and transform large datasets. Develop and optimize data models, data workflows, and database queries for performance and reliability. Manage and maintain data infrastructure across cloud platforms. Integrate data from multiple sources including databases, APIs, and streaming platforms. Ensure data quality, integrity, and availability across systems. Collaborate with cross-functional teams including data analysts, data scientists, and software engineers to support data initiatives. Troubleshoot and resolve data-related issues while continuously improving pipeline performance. Bachelor's degree of Computer Science or related field. 2–5 years of experience in Data Engineering or a related role. 2–5 years of experience in Data Engineering or a related role. Strong programming skills in Python and advanced SQL. Strong programming skills in Python and advanced SQL. Experience building and maintaining ETL/ELT pipelines. Experience building and maintaining ETL/ELT pipelines. Familiarity with cloud platforms such as AWS, Google Cloud Platform, or Microsoft Azure. Familiarity with cloud platforms such as AWS, Google Cloud Platform, or Microsoft Azure. Experience working with relational databases such as PostgreSQL or MySQL. Experience working with relational databases such as PostgreSQL or MySQL. Basic knowledge of big data and streaming technologies (e.g., Apache Kafka). Basic knowledge of big data and streaming technologies (e.g., Apache Kafka). Strong analytical and problem-solving skills with the ability to work collaboratively in a team environment. Strong analytical and problem-solving skills with the ability to work collaboratively in a team environment. Willing to work onsite in banking industry (Tangerang). Willing to work onsite in banking industry (Tangerang)."
+                        Output: Python, SQL, ETL/ELT, AWS, Google Cloud, Microsoft Azure, PostgreSQL, MySQL, Kafka
+
+                        Text: "Minimum Bachelor's degree Minimum Bachelor's degree Strong proficiency in Excel/data management skills Strong proficiency in Excel/data management skills Strong in stakeholders management, problem-solving, logical and analytical thinking skills Strong in stakeholders management, problem-solving, logical and analytical thinking skills Detailed-oriented and able to solve problems efficiently in a dynamic working environment. Detailed-oriented and able to solve problems efficiently in a dynamic working environment. Strong ability to analyze data and convert insights into strategic recommendations Strong ability to analyze data and convert insights into strategic recommendations Have a good eye for detail and are attentive and accurate when entering data Have a good eye for detail and are attentive and accurate when entering data Self–starter, work independently with limited guidance, solution-oriented and team player Self–starter, work independently with limited guidance, solution-oriented and team player Critical thinkers can analyze situations from multiple perspectives Critical thinkers can analyze situations from multiple perspectives	Job Description : Generate business insights through data analysis, and provide recommendations to improve business performance accordingly Work closely with Regional & Area leaders and in driving Area strategy planning by processing local insight and combine it with data analysis Develop business plan and translate it to action items, collaborate with other vast stakeholders, determine success metrics, and provide the result takeaways Go-to person for any new products/service launch Able to make key business decisions or provide solid recommendation based on data/analytical thinking  Requirement : Minimum Bachelor's degree  Strong proficiency in Excel/data management skills Strong in stakeholders management, problem-solving, logical and analytical thinking skills Detailed-oriented and able to solve problems efficiently in a dynamic working environment. Strong ability to analyze data and convert insights into strategic recommendations Have a good eye for detail and are attentive and accurate when entering data Self–starter, work independently with limited guidance, solution-oriented and team player Critical thinkers can analyze situations from multiple perspectives"
+                        Output: Excel
+
+                        Text: "What's your expected monthly basic salary? Which of the following types of qualifications do you have? How many years' experience do you have as a data analyst? How many years' experience do you have using SQL queries? Which of the following programming languages are you experienced in? Which of the following data analytics tools are you experienced with? Do you have experience in a sales role? Kualifikasi: 1. Pendidikan: Sarjana dalam bidang yang relevan, seperti Statistika, Matematika, Ilmu Komputer, atau Ekonomi. 2. Pengalaman: Pengalaman dalam analisis data, terutama dalam industri distribusi consumer goods. 3. Kemampuan Analisis: Kemampuan analisis data yang kuat, termasuk kemampuan untuk mengidentifikasi pola dan tren. 4. Kemampuan Komunikasi: Kemampuan komunikasi yang efektif untuk mempresentasikan hasil analisis kepada manajemen. 5. Kemampuan Teknis: Kemampuan menggunakan perangkat lunak analisis data, seperti Excel, SQL, Python, R, atau Tableau. 6. Bersedia bekerja dari senin - sabtu (setengah hari) 7. Penempatan Kalideres, Jakarta Barat  Keahlian: 1. Analisis Data: Keahlian dalam analisis data, termasuk kemampuan untuk mengidentifikasi pola dan tren. 2. Penggunaan Perangkat Lunak: Keahlian dalam menggunakan perangkat lunak analisis data, seperti Excel, SQL, Python, R, atau Tableau. 3. Komunikasi: Keahlian dalam komunikasi yang efektif untuk mempresentasikan hasil analisis kepada manajemen. 4. Problem-Solving: Keahlian dalam memecahkan masalah dan mengidentifikasi peluang terbaik Tugas dan Tanggung Jawab: 1. Analisis Data: Mengumpulkan, menganalisis, dan menginterpretasikan data penjualan,   distribusi, dan lain-lain untuk memahami tren dan pola. 2. Pengembangan Laporan: Membuat laporan yang akurat dan tepat waktu untuk membantu manajemen dalam pengambilan keputusan. 3. Identifikasi Masalah: Mengidentifikasi masalah dan peluang perbaikan dalam proses distribusi dan penjualan. 4. Rekomendasi: Memberikan rekomendasi kepada manajemen berdasarkan hasil analisis data. 5. Pengembangan Model: Mengembangkan model analisis data untuk memprediksi penjualan, distribusi, dan lain-lain."
+                        Output: SQL, Excel, Python, R, Tableau
+
+                        Text: "{text}"
+                        Output:"""
+
+    full_prompt = f"System: {system_prompt}\nUser: {user_prompt}"
+    # prompt = f"""Extract only technical hard skills (tools, programming languages, certifications) from the text below.
+    # Output: Comma-separated list only. No intro, no commentary.
+    # Text: {text}"""    
     playload = {
         'model':OLLAMA_MODEL,
-        'prompt':prompt, 
+        'prompt':full_prompt, 
         'stream':False,
         'options':{
             'temperature':0
@@ -316,9 +382,9 @@ def extract_education_req(text):
 
 def process_skill_enrinchment():
     # enginge for sql server
-    src_engine = create_engine('mssql+pyodbc://sa:YourStrongPassword123!@sql-server:1433/Job_analyzer?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes')
+    src_engine = create_engine('mssql+pyodbc://sa:<YOUR_PASSWORD>@sql-server:1433/Job_analyzer?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes')
     # engine for postgre
-    dest_engine = create_engine('postgresql://postgres2:adminpassword@postgres_db:5432/job_market_db')
+    dest_engine = create_engine('postgresql://postgres2:<YOUR_PASSWORD>@postgres_db:5432/job_market_db')
     # pulling data from sql server
 
     print("Membaca data staging dari SQL Server")
@@ -334,13 +400,14 @@ def process_skill_enrinchment():
     metadata.create_all(dest_engine)
     print(f"pengecekan table {table_name} selesai...")
     query = """
-        SELECT link, minimum_qualifications
-        FROM stg_jobstreet_raw
-        UNION ALL
-        SELECT link, minimum_qualifications
-        FROM stg_kalibrr_raw
-    """
+            SELECT link, minimum_qualifications, job_description
+            FROM stg_jobstreet_raw
+            UNION ALL
+            SELECT link, minimum_qualifications, job_description
+            FROM stg_kalibrr_raw
+            """
     df = pd.read_sql(query, src_engine)
+    df['full_context'] = df[['minimum_qualifications', 'job_description']].fillna('').agg('\n'.join, axis=1)
     # read the existing links
     try:
         Existing_links = pd.read_sql(f"SELECT link from {table_name} ", dest_engine)['link'].to_list()
@@ -355,7 +422,7 @@ def process_skill_enrinchment():
     print(f"memulai extraksi AI untuk {total_process} data baru...")
 
     for i, (index, row) in enumerate(df_to_process.iterrows(),1):
-        skills = extract_hard_skill(row['minimum_qualifications'])
+        skills = extract_hard_skill(row['full_context'])
         # proses ekstraksi
         if skills:
             single_row_df = pd.DataFrame([{'link':row['link'], 'hard_skills':skills}])
@@ -368,8 +435,8 @@ def process_skill_enrinchment():
                 print(f"[{i}/{total_process}] ❌ Gagal simpan: {e}")
 
 def process_education_enrinchment():
-    src_engine = create_engine('mssql+pyodbc://sa:YourStrongPassword123!@sql-server:1433/Job_analyzer?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes')
-    dest_engine = create_engine('postgresql://postgres2:adminpassword@postgres_db:5432/job_market_db')
+    src_engine = create_engine('mssql+pyodbc://sa:<YOUR_PASSWORD>@sql-server:1433/Job_analyzer?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes')
+    dest_engine = create_engine('postgresql://postgres2:<YOUR_PASSWORD>@postgres_db:5432/job_market_db')
     print("membaca data staging dari sql server")
     metadata = MetaData()
     table_name = 'clean_education'
@@ -462,8 +529,8 @@ def extract_major(text):
         return None
 
 def process_major_enrinchment():
-    src_engine = create_engine('mssql+pyodbc://sa:YourStrongPassword123!@sql-server:1433/Job_analyzer?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes')
-    dest_engine = create_engine('postgresql://postgres2:adminpassword@postgres_db:5432/job_market_db')
+    src_engine = create_engine('mssql+pyodbc://sa:<YOUR_PASSWORD>@sql-server:1433/Job_analyzer?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes')
+    dest_engine = create_engine('postgresql://postgres2:<YOUR_PASSWORD>@postgres_db:5432/job_market_db')
     print("membaca data staging")
     metadata = MetaData()
     table_name = 'clean_major_tb'
@@ -525,8 +592,8 @@ def extract_exp_yr(text):
     return matches.group()
 
 def process_exp_yr():
-    src_engine = create_engine('mssql+pyodbc://sa:YourStrongPassword123!@sql-server:1433/Job_analyzer?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes')
-    dest_engine = create_engine('postgresql://postgres2:adminpassword@postgres_db:5432/job_market_db')
+    src_engine = create_engine('mssql+pyodbc://sa:<YOUR_PASSWORD>@sql-server:1433/Job_analyzer?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes')
+    dest_engine = create_engine('postgresql://postgres2:<YOUR_PASSWORD>@postgres_db:5432/job_market_db')
     print("membaca data staging")
     metadata = MetaData()
     table_name = 'exp_tb_clean'
@@ -538,13 +605,14 @@ def process_exp_yr():
     metadata.create_all(dest_engine)
     print(f"pengecekan table {table_name} selesai...")
     query = """
-        SELECT link, minimum_qualifications
-        FROM stg_jobstreet_raw
-        UNION ALL
-        SELECT link, minimum_qualifications
-        FROM stg_kalibrr_raw;
-        """
+            SELECT link, minimum_qualifications, job_description
+            FROM stg_jobstreet_raw
+            UNION ALL
+            SELECT link, minimum_qualifications, job_description
+            FROM stg_kalibrr_raw
+            """
     df = pd.read_sql(query, src_engine)
+    df['full_context'] = df[['minimum_qualifications','job_description']].fillna('').agg('\n'.join, axis=1)
     try:
         Existing_links = pd.read_sql(f"SELECT link from {table_name}", dest_engine)['link'].to_list()
     except:
@@ -556,7 +624,7 @@ def process_exp_yr():
     print(f"memulai extraksi AI untuk {total_processed} data baru...")
 
     for i, (index, row) in enumerate(df_processed.iterrows(), 1):
-        exp = extract_exp_yr(row['minimum_qualifications'])
+        exp = extract_exp_yr(row['full_context'])
         if exp:
             single_row_df = pd.DataFrame({'link':[row['link']], 'min_exp':[exp]})
             try:
@@ -565,5 +633,74 @@ def process_exp_yr():
             except Exception as e:
                 print(f"[{i}/{total_processed}] ❌ Gagal simpan: {e}") 
 
+def join_extract_sql_postgres():
+    src_engine = create_engine('mssql+pyodbc://sa:<YOUR_PASSWORD>@sql-server:1433/Job_analyzer?driver=ODBC+Driver+18+for+SQL+Server&TrustServerCertificate=yes')
+    dest_engine = create_engine('postgresql://postgres2:<YOUR_PASSWORD>@postgres_db:5432/job_market_db')
+    metadata = MetaData()
+    table_name = 'remain_tb'
+    remain_tb = Table(
+        table_name, metadata,
+        Column('link', String, primary_key=True),
+        Column('source_site', String),
+        Column('location', String),
+        Column('role', String),
+        Column('salary', String),
+        Column('job_type', String),
+        Column('company', String),
+        Column('position', String),
+        Column('specialization', String),
+        Column('industry', String),
+        Column('date_posted', String)        
+    )
+    metadata.create_all(dest_engine)
+    query = """
+            SELECT
+            link, 
+            source_site,
+            location,
+            role,
+            salary,
+            job_type,
+            company,
+            NULL AS position,
+            NULL AS specialization,
+            NULL AS industry,
+            date_posted
+            FROM stg_jobstreet_raw
+
+            UNION ALL
+
+            SELECT
+            link, 
+            source_site,
+            location,
+            role,
+            salary,
+            job_type,
+            company,
+            position,
+            specialization,
+            industry,
+            date_posted
+            FROM stg_kalibrr_raw            
+            """
+    df = pd.read_sql(query, src_engine)
+    try:
+        existing_tb = pd.read_sql(f'SELECT * from {table_name}', dest_engine)['link'].to_list()
+    except:
+        existing_tb = []
+    processed_tb = df[~df['link'].isin(existing_tb)]
+    total_processed = len(processed_tb)
+    print(f"memproses total {total_processed} data...")
+    print(f"total data di staging: {len(df)}")
+    print(f"data yang sudah pernah diproses: {len(existing_tb)}")
+    print(f"memulai extraksi AI untuk {total_processed} data baru...")
+
+    processed_tb.to_sql(table_name, dest_engine, if_exists='append', index=False)
+
 if __name__ == '__main__':
+    process_skill_enrinchment()
+    process_education_enrinchment()
+    process_major_enrinchment()
     process_exp_yr()
+    join_extract_sql_postgres()
